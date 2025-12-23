@@ -1,0 +1,40 @@
+# Neo4j Import Commands
+# Place CSV files in Neo4j's import directory (e.g., /var/lib/neo4j/import/)
+# Then run these commands in Neo4j Browser or Cypher Shell
+
+# 1. Import table nodes
+LOAD CSV WITH HEADERS FROM 'file:///nodes_tables.csv' AS row
+CREATE (t:Table {table_id: row.table_id, name: row.name, file: row.file, field_count: toInteger(row.field_count)});
+
+# 2. Import field nodes
+LOAD CSV WITH HEADERS FROM 'file:///nodes_fields.csv' AS row
+CREATE (f:Field {field_id: row.field_id, name: row.name, db_field: row.db_field, semantic: row.semantic, table_count: toInteger(row.table_count)});
+
+# 3. Create indexes for better performance
+CREATE INDEX table_id_index IF NOT EXISTS FOR (t:Table) ON (t.table_id);
+CREATE INDEX field_id_index IF NOT EXISTS FOR (f:Field) ON (f.field_id);
+
+# 4. Import field-table relationships (BELONGS_TO)
+LOAD CSV WITH HEADERS FROM 'file:///relationships_belongs_to.csv' AS row
+MATCH (f:Field {field_id: row[":START_ID(Field)"]})
+MATCH (t:Table {table_id: row[":END_ID(Table)"]})
+CREATE (f)-[:BELONGS_TO]->(t);
+
+# 5. Import field-field relationships (HAS_NEXT)
+LOAD CSV WITH HEADERS FROM 'file:///relationships_field_relations.csv' AS row
+MATCH (f1:Field {field_id: row[":START_ID(Field)"]})
+MATCH (f2:Field {field_id: row[":END_ID(Field)"]})
+CREATE (f1)-[:HAS_NEXT {relation: row.relation}]->(f2);
+
+# 6. Query examples
+# Find all fields in a table
+MATCH (t:Table {name: 'ae0c'})<-[:BELONGS_TO]-(f:Field)
+RETURN t.name, f.name, f.semantic;
+
+# Find field relationships
+MATCH (f1:Field {name: 'AAC001'})-[r:HAS_NEXT]->(f2:Field)
+RETURN f1.name, r.relation, f2.name;
+
+# Find tables containing a specific field
+MATCH (f:Field {name: 'AAB001'})-[:BELONGS_TO]->(t:Table)
+RETURN f.name, t.name;
