@@ -1,0 +1,13 @@
+﻿category_id:ID(Category),name,table_count:int,:LABEL
+Business Process,Business Process,6,Category
+Core Risk Management,Core Risk Management,20,Category
+Data Tables,Data Tables,1,Category
+Dictionary Tables,Dictionary Tables,43,Category
+Fund Management,Fund Management,5,Category
+Maternity Insurance,Maternity Insurance,4,Category
+Medical Insurance,Medical Insurance,4,Category
+Other Risk Types,Other Risk Types,17,Category
+Retirement Insurance,Retirement Insurance,3,Category
+Unemployment Insurance,Unemployment Insurance,2,Category
+Views,Views,25,Category
+Work Injury Insurance,Work Injury Insurance,11,Category

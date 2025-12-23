@@ -1,40 +1,59 @@
-# Neo4j Import Commands
+# Neo4j Import Commands for Risk Control Database
 # Place CSV files in Neo4j's import directory (e.g., /var/lib/neo4j/import/)
 # Then run these commands in Neo4j Browser or Cypher Shell
 
-# 1. Import table nodes
+# 1. Import category nodes
+LOAD CSV WITH HEADERS FROM 'file:///nodes_categories.csv' AS row
+CREATE (c:Category {category_id: row.category_id, name: row.name, table_count: toInteger(row.table_count)});
+
+# 2. Import table nodes
 LOAD CSV WITH HEADERS FROM 'file:///nodes_tables.csv' AS row
-CREATE (t:Table {table_id: row.table_id, name: row.name, file: row.file, field_count: toInteger(row.field_count)});
+CREATE (t:Table {table_id: row.table_id, name: row.name, category: row.category, field_count: toInteger(row.field_count), description: row.description});
 
-# 2. Import field nodes
+# 3. Import field nodes
 LOAD CSV WITH HEADERS FROM 'file:///nodes_fields.csv' AS row
-CREATE (f:Field {field_id: row.field_id, name: row.name, db_field: row.db_field, semantic: row.semantic, table_count: toInteger(row.table_count)});
+CREATE (f:Field {field_id: row.field_id, name: row.name, data_type: row.data_type, description: row.description, table_count: toInteger(row.table_count), is_pk: toBoolean(row.is_pk), is_fk: toBoolean(row.is_fk)});
 
-# 3. Create indexes for better performance
+# 4. Create indexes for better performance
 CREATE INDEX table_id_index IF NOT EXISTS FOR (t:Table) ON (t.table_id);
 CREATE INDEX field_id_index IF NOT EXISTS FOR (f:Field) ON (f.field_id);
+CREATE INDEX category_id_index IF NOT EXISTS FOR (c:Category) ON (c.category_id);
 
-# 4. Import field-table relationships (BELONGS_TO)
+# 5. Import table-category relationships (BELONGS_TO_CATEGORY)
+LOAD CSV WITH HEADERS FROM 'file:///relationships_category.csv' AS row
+MATCH (t:Table {table_id: row[":START_ID(Table)"]})
+MATCH (c:Category {category_id: row[":END_ID(Category)"]})
+CREATE (t)-[:BELONGS_TO_CATEGORY]->(c);
+
+# 6. Import field-table relationships (BELONGS_TO)
 LOAD CSV WITH HEADERS FROM 'file:///relationships_belongs_to.csv' AS row
 MATCH (f:Field {field_id: row[":START_ID(Field)"]})
 MATCH (t:Table {table_id: row[":END_ID(Table)"]})
 CREATE (f)-[:BELONGS_TO]->(t);
 
-# 5. Import field-field relationships (HAS_NEXT)
-LOAD CSV WITH HEADERS FROM 'file:///relationships_field_relations.csv' AS row
-MATCH (f1:Field {field_id: row[":START_ID(Field)"]})
-MATCH (f2:Field {field_id: row[":END_ID(Field)"]})
-CREATE (f1)-[:HAS_NEXT {relation: row.relation}]->(f2);
+# 7. Import table-table relationships (REFERENCES)
+LOAD CSV WITH HEADERS FROM 'file:///relationships_table_relations.csv' AS row
+MATCH (t1:Table {table_id: row[":START_ID(Table)"]})
+MATCH (t2:Table {table_id: row[":END_ID(Table)"]})
+CREATE (t1)-[:REFERENCES {field: row.field}]->(t2);
 
-# 6. Query examples
+# 8. Query examples
+# Find all tables in a category
+MATCH (c:Category {name: 'Core Risk Management'})<-[:BELONGS_TO_CATEGORY]-(t:Table)
+RETURN c.name, t.name, t.field_count;
+
 # Find all fields in a table
-MATCH (t:Table {name: 'ae0c'})<-[:BELONGS_TO]-(f:Field)
-RETURN t.name, f.name, f.semantic;
+MATCH (t:Table {name: 'YRA01'})<-[:BELONGS_TO]-(f:Field)
+RETURN t.name, f.name, f.data_type, f.is_pk, f.is_fk;
 
-# Find field relationships
-MATCH (f1:Field {name: 'AAC001'})-[r:HAS_NEXT]->(f2:Field)
-RETURN f1.name, r.relation, f2.name;
+# Find foreign key relationships between tables
+MATCH (t1:Table)-[r:REFERENCES]->(t2:Table)
+RETURN t1.name, r.field, t2.name;
 
-# Find tables containing a specific field
-MATCH (f:Field {name: 'AAB001'})-[:BELONGS_TO]->(t:Table)
-RETURN f.name, t.name;
+# Find risk rule chain
+MATCH (rule:Table {name: 'YRA01'})-[:REFERENCES]->(event:Table {name: 'YRA02'})-[:REFERENCES]->(info:Table)
+RETURN rule.name, event.name, info.name;
+
+# Find all medical insurance risk tables
+MATCH (c:Category {name: 'Medical Insurance'})<-[:BELONGS_TO_CATEGORY]-(t:Table)
+RETURN t.name, t.description;
